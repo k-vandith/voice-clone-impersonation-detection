@@ -29,7 +29,7 @@ def main() -> None:
     st.markdown(f'<div class="panel"><div class="kicker">Decision</div><p class="title">{risk["risk_level"]} · {risk["spoof_probability"]:.0%} spoof probability</p><p class="muted">This is a CPU demo on synthetic audio, not a certified detector. A high score means the local model is unsure the clip is genuine.</p></div>', unsafe_allow_html=True)
     fig = go.Figure(go.Scatter(y=samples[::8], line=dict(color="#b79bff", width=1)))
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#e7ecf3", height=280, title="Waveform (downsampled)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.json({k: round(v, 4) if isinstance(v, float) else v for k, v in feats.items()})
 
 if __name__ == "__main__":
