@@ -107,6 +107,8 @@ async function loadDemo(kind) {
     selectedFile = null;
     fileInput.value = "";
     analyzeButton.disabled = true;
+    if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
+    activeObjectUrl = null;
     document.getElementById("fileName").textContent = kind === "reference" ? "Reference test tone" : "Processed test tone";
     document.getElementById("fileMeta").textContent = "Generated locally · not human speech";
     document.getElementById("fileState").textContent = "DEMO";
@@ -238,4 +240,6 @@ document.getElementById("demoReference").addEventListener("click", () => loadDem
 document.getElementById("demoProcessed").addEventListener("click", () => loadDemo("processed"));
 document.getElementById("exportReport").addEventListener("click", exportReport);
 
-if (activeObjectUrl) window.addEventListener("beforeunload", () => URL.revokeObjectURL(activeObjectUrl));
+window.addEventListener("beforeunload", () => {
+  if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
+});
