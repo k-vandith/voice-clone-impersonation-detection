@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5fb">
+  <meta name="description" content="Local-first voice signal review and explainable audio heuristics.">
+  <title>Soniq — Voice Integrity Studio</title>
+  <link rel="icon" href="/web/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/web/styles.css">
+  <script src="/web/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Soniq home">
+        <img src="/web/mark.svg" alt="" width="38" height="38">
+        <span class="brand-name">soniq<span class="brand-period">.</span><small>VOICE INTEGRITY STUDIO</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="local-pill"><i></i> LOCAL ANALYSIS</span>
+        <span class="top-separator"></span>
+        <span class="build-label">RESEARCH PREVIEW <b>v1.0</b></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div class="intro-copy">
+          <div class="eyebrow"><span class="eyebrow-line"></span> AUDIO SECURITY / SIGNAL REVIEW</div>
+          <h1>Every voice leaves<br><em>a signal.</em></h1>
+          <p>Inspect an audio sample for unusual signal characteristics with a transparent, local heuristic. Start with a WAV file or explore the included test tones.</p>
+        </div>
+        <div class="intro-art" aria-hidden="true">
+          <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+          <div class="art-core"><span>∿</span></div>
+          <div class="art-wave art-wave-one"></div><div class="art-wave art-wave-two"></div>
+          <div class="art-caption">SIGNAL / 01</div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Audio review workspace">
+        <div class="left-column">
+          <article class="card ingest-card">
+            <div class="section-head">
+              <div><span class="section-number">01</span><span class="section-label">SOURCE AUDIO</span></div>
+              <span class="supported-tag">PCM WAV · MAX 12 MB</span>
+            </div>
+            <h2>Bring a sample into the studio</h2>
+            <p class="card-subtitle">Your audio is processed by this local service and is not saved to disk.</p>
+
+            <input id="fileInput" class="visually-hidden" type="file" accept=".wav,audio/wav,audio/x-wav" aria-label="Choose WAV audio file">
+            <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Drop WAV file or browse">
+              <div class="upload-icon"><svg viewBox="0 0 32 32" role="presentation"><path d="M16 22V7m0 0L10 13m6-6 6 6M6 21v5h20v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div class="drop-copy"><strong>Drop your WAV file here</strong><span>or browse files on your computer</span></div>
+              <button id="browseButton" class="button button-outline" type="button">Choose file <span>↗</span></button>
+              <span class="drop-corner corner-tl"></span><span class="drop-corner corner-br"></span>
+            </div>
+
+            <div class="file-strip">
+              <div class="file-type">WAV</div>
+              <div class="file-info"><strong id="fileName">No audio selected</strong><span id="fileMeta">Choose a file to inspect its signal</span></div>
+              <span id="fileState" class="file-state">WAITING</span>
+            </div>
+
+            <div class="ingest-buttons">
+              <button id="analyzeButton" class="button button-primary" type="button" disabled><span class="button-play">▶</span> Analyze audio</button>
+              <button id="demoReference" class="button button-text" type="button">Try reference tone</button>
+              <button id="demoProcessed" class="button button-text" type="button">Try processed tone</button>
+            </div>
+            <div class="fixture-note"><span>i</span> Demo tones test the interface only — they are not human speech and do not validate voice-clone detection.</div>
+          </article>
+
+          <article class="card waveform-card">
+            <div class="section-head">
+              <div><span class="section-number">02</span><span class="section-label">SIGNAL PREVIEW</span></div>
+              <span id="waveformStatus" class="subtle-label">NO SIGNAL LOADED</span>
+            </div>
+            <div class="wave-heading"><div><h2>Waveform</h2><p>Amplitude over the selected audio sample.</p></div><span id="durationChip" class="duration-chip">—:—</span></div>
+            <div id="waveformEmpty" class="waveform-empty"><div class="mini-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span>Load an audio sample to view its waveform</span></div>
+            <div id="waveform" class="waveform" aria-label="Audio waveform" role="img"></div>
+            <audio id="audioPlayer" class="audio-player" controls preload="metadata" hidden></audio>
+            <div class="wave-footer"><span><i class="legend-dot"></i> AMPLITUDE</span><span id="sampleRateLabel">SAMPLE RATE —</span><span id="channelLabel">CHANNELS —</span></div>
+          </article>
+        </div>
+
+        <div class="right-column">
+          <article class="score-card">
+            <div class="score-top"><span class="section-number">03</span><span class="section-label">SIGNAL ASSESSMENT</span><span class="score-live"><i></i> HEURISTIC</span></div>
+            <div class="score-title">Synthetic-signal cues</div>
+            <div class="score-ring-wrap">
+              <svg class="score-ring" viewBox="0 0 180 180" aria-label="Heuristic signal score">
+                <circle class="ring-track" cx="90" cy="90" r="70"></circle>
+                <circle id="scoreArc" class="ring-progress" cx="90" cy="90" r="70"></circle>
+              </svg>
+              <div class="score-center"><strong id="scoreValue">—</strong><span>OUT OF 100</span></div>
+            </div>
+            <div id="riskBadge" class="risk-badge awaiting">AWAITING SAMPLE</div>
+            <h2 id="decisionTitle">Ready for review</h2>
+            <p id="decisionText">Load an audio file to calculate its signal indicators.</p>
+            <div class="score-separator"></div>
+            <div class="score-summary"><span>Analysis engine</span><strong>Signal heuristics</strong></div>
+            <div class="score-summary"><span>Processing mode</span><strong>On-device workflow</strong></div>
+            <div class="score-summary"><span>Verdict confidence</span><strong class="not-calibrated">Not calibrated</strong></div>
+            <button id="exportReport" class="button button-report" type="button" disabled>Export review report <span>↓</span></button>
+          </article>
+
+          <article class="card evidence-card">
+            <div class="section-head">
+              <div><span class="section-number">04</span><span class="section-label">ACOUSTIC EVIDENCE</span></div>
+              <span class="evidence-symbol">⌁</span>
+            </div>
+            <h2>Feature readings</h2>
+            <p class="card-subtitle">Signal measurements used by this heuristic.</p>
+            <div id="featureList" class="feature-list">
+              <div class="feature-row"><div><strong>Signal energy</strong><span>Average squared amplitude</span></div><b>—</b><div class="feature-track"><i class="feature-fill fill-mint"></i></div></div>
+              <div class="feature-row"><div><strong>Zero-crossing rate</strong><span>Sign changes per sample</span></div><b>—</b><div class="feature-track"><i class="feature-fill fill-purple"></i></div></div>
+              <div class="feature-row"><div><strong>Spectral flatness</strong><span>Noise-like vs tonal spectrum</span></div><b>—</b><div class="feature-track"><i class="feature-fill fill-coral"></i></div></div>
+              <div class="feature-row"><div><strong>Spectral centroid</strong><span>Frequency balance proxy</span></div><b>—</b><div class="feature-track"><i class="feature-fill fill-blue"></i></div></div>
+            </div>
+            <div class="evidence-foot"><span class="evidence-info">i</span><p>These indicators are interpretable signal measurements, not proof that a speaker is genuine or cloned.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="method-note">
+        <div class="method-icon">✳</div>
+        <div><strong>Use as a screening aid, not a final verdict.</strong><p>This prototype uses lightweight acoustic thresholds. It has not been validated against real-world cloned speech, and its score is not a probability of impersonation.</p></div>
+        <div class="method-side">NO CLOUD<br>NO RETENTION</div>
+      </section>
+
+      <footer class="footer">
+        <div class="footer-brand"><img src="/web/mark.svg" alt="" width="23" height="23"><strong>soniq<span>.</span></strong><small>VOICE INTEGRITY STUDIO</small></div>
+        <div class="footer-right"><span>LOCAL-FIRST</span><i></i><span>RESEARCH / DEMO</span><i></i><span>MIT</span></div>
+      </footer>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+</body>
+</html>
