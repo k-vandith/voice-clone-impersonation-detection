@@ -21,6 +21,33 @@ function announce(message, error = false) {
   toastTimer = window.setTimeout(() => toast.classList.remove("show"), 3500);
 }
 
+
+function clearResults() {
+  activePayload = null;
+  document.getElementById("exportReport").disabled = true;
+  document.getElementById("scoreValue").textContent = "—";
+  document.getElementById("scoreArc").setAttribute("stroke-dashoffset", "439.82");
+  document.getElementById("scoreArc").setAttribute("stroke", "#6b4eff");
+  const badge = document.getElementById("riskBadge");
+  badge.className = "risk-badge awaiting";
+  badge.textContent = "AWAITING ANALYSIS";
+  document.getElementById("decisionTitle").textContent = "Ready for review";
+  document.getElementById("decisionText").textContent = "Analyze the selected sample to view its signal indicators.";
+  document.getElementById("durationChip").textContent = "—:—";
+  document.getElementById("waveformStatus").textContent = "NO SIGNAL ANALYZED";
+  document.getElementById("sampleRateLabel").textContent = "SAMPLE RATE —";
+  document.getElementById("channelLabel").textContent = "CHANNELS —";
+  document.getElementById("waveform").hidden = true;
+  document.getElementById("waveform").innerHTML = "";
+  document.getElementById("waveformEmpty").hidden = false;
+  document.getElementById("featureList").innerHTML = [
+    ["Signal energy", "Average squared amplitude", "fill-mint"],
+    ["Zero-crossing rate", "Sign changes per sample", "fill-purple"],
+    ["Spectral flatness", "Noise-like vs tonal spectrum", "fill-coral"],
+    ["Spectral centroid", "Frequency balance proxy", "fill-blue"]
+  ].map(item => '<div class="feature-row"><div><strong>' + item[0] + '</strong><span>' + item[1] + '</span></div><b>—</b><div class="feature-track"><i class="feature-fill ' + item[2] + ' w-0"></i></div></div>').join("");
+}
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(Number(seconds) || 0));
   return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
@@ -56,6 +83,7 @@ function chooseFile(file) {
     return;
   }
   selectedFile = file;
+  clearResults();
   document.getElementById("fileName").textContent = file.name;
   document.getElementById("fileMeta").textContent = formatBytes(file.size) + " · ready for local review";
   document.getElementById("fileState").textContent = "READY";
