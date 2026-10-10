@@ -98,10 +98,8 @@ def analyze_wav_bytes(raw: bytes) -> dict:
             expected_size = frame_count * channels * sample_width
             if len(pcm) != expected_size:
                 raise ValueError("The WAV file appears truncated or malformed.")
-    except wave.Error as error:
+    except (wave.Error, EOFError, struct.error) as error:
         raise ValueError("Could not parse the WAV header. Try exporting as PCM WAV.") from error
-    except EOFError as error:
-        raise ValueError("The WAV file is incomplete.") from error
 
     if sample_width == 1:
         decoded = (np.frombuffer(pcm, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
