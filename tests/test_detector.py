@@ -48,3 +48,10 @@ def test_feature_extractor_rejects_nonfinite_or_multichannel_arrays():
         extract_features(np.array([0.0, np.nan, 0.1]), 16000)
     with pytest.raises(ValueError, match="one-dimensional"):
         extract_features(np.ones((4, 2)), 16000)
+
+@pytest.mark.parametrize("amplitude", [1.01, -1.01, 1e30])
+def test_feature_extractor_rejects_out_of_range_finite_samples(amplitude):
+    samples = np.full(32, amplitude, dtype=np.float32)
+
+    with pytest.raises(ValueError, match="normalized to the range"):
+        extract_features(samples, 16000)
