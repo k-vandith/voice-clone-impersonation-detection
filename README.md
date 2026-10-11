@@ -38,6 +38,12 @@ Open http://127.0.0.1:8501.
 
 Audio is processed in memory by the local server and is not saved to disk or sent to an external service. The score uses simple signal heuristics; it is **not** a calibrated probability and has not been validated as a real-world voice-clone detector. A low score does not prove authenticity.
 
+## Production deployment gate
+
+Soniq deliberately binds to `127.0.0.1` and does not implement user authentication. Keep it on loopback. Remote operator access, if required, must be through a same-host authenticated HTTPS reverse proxy; do not expose the service directly.
+
+The score is based on signal heuristics and has not been calibrated or validated as a real-world voice-clone detector. It must not be used as a sole identity, access, employment, legal, or fraud decision signal. Operational use requires consent/privacy review, representative validation data, bias and robustness testing, threshold calibration, human review, and monitoring for distribution shift.
+
 ## License
 
 MIT
