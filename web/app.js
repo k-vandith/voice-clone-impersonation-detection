@@ -197,19 +197,17 @@ function renderPayload(data) {
   document.getElementById("scoreValue").textContent = String(data.score_percent);
   document.getElementById("scoreArc").setAttribute("stroke-dashoffset", String(439.82 * (1 - Math.max(0, Math.min(100, data.score_percent)) / 100)));
   const insufficientSignal = data.signal_quality === "silent_or_near_silent";
-  const risk = insufficientSignal ? "review" : (data.risk_level || "low");
+  // The current product does not have a validated detector. Always require human
+  // review and never present threshold flags as a clone-authenticity decision.
+  const risk = "review";
   document.getElementById("scoreArc").setAttribute("stroke", risk === "high" ? "#e87983" : risk === "review" ? "#d8a04c" : "#6b4eff");
   const badge = document.getElementById("riskBadge");
   badge.className = "risk-badge " + risk;
-  badge.textContent = insufficientSignal ? "INSUFFICIENT SIGNAL" : risk === "high" ? "STRONG HEURISTIC FLAGS" : risk === "review" ? "REVIEW INDICATED" : "NO STRONG FLAGS";
-  document.getElementById("decisionTitle").textContent = insufficientSignal ? "Not enough signal to assess" : risk === "high" ? "Review this sample" : risk === "review" ? "Some signals stand out" : "No strong cues detected";
+  badge.textContent = insufficientSignal ? "INSUFFICIENT SIGNAL" : "UNVALIDATED HEURISTIC";
+  document.getElementById("decisionTitle").textContent = insufficientSignal ? "Not enough signal to assess" : "Human review required";
   document.getElementById("decisionText").textContent = insufficientSignal
-    ? "This file is silent or near-silent. Record a usable sample before interpreting any voice-integrity score."
-    : risk === "high"
-      ? "Several thresholds were triggered by this signal. This does not establish that the voice is cloned."
-      : risk === "review"
-        ? "One or more simple signal thresholds were triggered. Compare with trusted reference audio before drawing conclusions."
-        : "This sample did not cross the current heuristic thresholds. That is not proof that the voice is genuine.";
+    ? "This file is silent or near-silent. There is not enough signal for review."
+    : "The displayed percentage is an uncalibrated acoustic heuristic, not a probability. This build has no validated voice-clone classifier; compare with trusted reference audio and do not treat this score as an authenticity decision.";
   document.getElementById("durationChip").textContent = formatDuration(data.duration_seconds);
   document.getElementById("waveformStatus").textContent = insufficientSignal ? "NO MEASURABLE SIGNAL" : "SIGNAL READY";
   document.getElementById("sampleRateLabel").textContent = (Number(data.sample_rate) / 1000).toFixed(1) + " KHZ";
