@@ -112,7 +112,14 @@ def train_spoof_classifier(df: pd.DataFrame) -> dict[str, Any]:
             "validation_scope": "synthetic_demo_only" if df.attrs.get("synthetic_demo_data") else "holdout_only_unvalidated",
         }
     except ImportError:
-        return {"backend": "rules", "model": None, "feature_cols": feature_cols, "accuracy": None, "calibrated": False, "validation_scope": "not_validated"}
+        return {
+            "backend": "rules",
+            "model": None,
+            "feature_cols": feature_cols,
+            "accuracy": None,
+            "calibrated": False,
+            "validation_scope": "synthetic_demo_only" if df.attrs.get("synthetic_demo_data") else "not_validated",
+        }
 
 
 def score_risk(feats: dict[str, float], model_info: dict[str, Any] | None = None) -> dict[str, Any]:
