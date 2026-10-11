@@ -12,7 +12,8 @@ def test_detect():
         import runpy
         runpy.run_path(str(p.parents[2] / "scripts" / "generate_demo_data.py"))
     result = detect(p)
-    assert 0 <= result.confidence <= 1
+    assert result.confidence is None
+    assert 0 <= result.heuristic_score <= 1
     assert result.alert in ("HEURISTIC_REVIEW_ONLY", "INSUFFICIENT_AUDIO_SIGNAL")
 
 
@@ -25,7 +26,8 @@ def test_detect_uses_same_validated_decoder_as_upload_analysis(tmp_path: Path):
     upload = analyze_wav_bytes(raw)
 
     assert direct.features == upload["features"]
-    assert direct.confidence == upload["threshold_weight_score"]
+    assert direct.confidence is None
+    assert direct.heuristic_score == upload["threshold_weight_score"]
     assert direct.is_synthetic_likely is None
     assert upload["is_synthetic_likely"] is None
     assert upload["decision_status"] == "NOT_VALIDATED_HUMAN_REVIEW_ONLY"
@@ -57,3 +59,16 @@ def test_feature_extractor_rejects_out_of_range_finite_samples(amplitude):
 
     with pytest.raises(ValueError, match="normalized to the range"):
         extract_features(samples, 16000)
+
+
+
+def test_heuristic_output_is_not_exposed_as_model_confidence(tmp_path: Path):
+    path = tmp_path / "demo.wav"
+    path.write_bytes(build_demo_wav("processed"))
+
+    result = detect(path)
+
+    assert result.confidence is None
+    assert 0 <= result.heuristic_score <= 1
+    assert result.is_synthetic_likely is None
+    assert result.alert == "HEURISTIC_REVIEW_ONLY"
