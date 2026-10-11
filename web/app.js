@@ -194,8 +194,9 @@ function renderFeatures(data) {
 
 function renderPayload(data) {
   activePayload = data;
-  document.getElementById("scoreValue").textContent = String(data.score_percent);
-  document.getElementById("scoreArc").setAttribute("stroke-dashoffset", String(439.82 * (1 - Math.max(0, Math.min(100, data.score_percent)) / 100)));
+  const heuristicIndex = Number.isFinite(Number(data.score_index)) ? Math.max(0, Math.min(1, Number(data.score_index))) : null;
+  document.getElementById("scoreValue").textContent = heuristicIndex === null ? "—" : heuristicIndex.toFixed(2);
+  document.getElementById("scoreArc").setAttribute("stroke-dashoffset", String(439.82 * (1 - (heuristicIndex ?? 0))));
   const insufficientSignal = data.signal_quality === "silent_or_near_silent";
   // The current product does not have a validated detector. Always require human
   // review and never present threshold flags as a clone-authenticity decision.
