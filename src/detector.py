@@ -8,7 +8,8 @@ import numpy as np
 @dataclass
 class DetectionResult:
     is_synthetic_likely: bool | None
-    confidence: float
+    confidence: float | None
+    heuristic_score: float
     features: dict
     alert: str
     notes: str
@@ -54,7 +55,8 @@ def detect(path: Path) -> DetectionResult:
     score = float(analysis["threshold_weight_score"])
     return DetectionResult(
         is_synthetic_likely=bool(analysis["is_synthetic_likely"]),
-        confidence=round(score, 3),
+        confidence=None,
+        heuristic_score=round(score, 3),
         features=analysis["features"],
         alert=analysis["alert"],
         notes=analysis["notes"],
