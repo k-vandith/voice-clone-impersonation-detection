@@ -14,10 +14,10 @@ from src.detector import analyze_wav_bytes, build_demo_wav
 from src.webapp import VoiceReviewHandler
 
 
-def make_wav(sample_width=2, channels=1, sample_rate=16000, duration=1.0):
+def make_wav(sample_width=2, channels=1, sample_rate=16000, duration=1.0, amplitude=0.45):
     count = int(sample_rate * duration)
     t = np.arange(count, dtype=np.float64) / sample_rate
-    signal = 0.45 * np.sin(2 * np.pi * 330 * t)
+    signal = amplitude * np.sin(2 * np.pi * 330 * t)
     if sample_width == 1:
         mono = np.clip(signal * 127 + 128, 0, 255).astype(np.uint8)
     elif sample_width == 2:
@@ -161,3 +161,15 @@ def test_upload_endpoint_rejects_wrong_content_type(local_server):
         urlopen(request)
     assert error.value.code == 415
     assert "PCM WAV" in error.value.read().decode("utf-8")
+
+
+
+def test_silent_wav_is_marked_insufficient_not_possible_synthetic_voice():
+    result = analyze_wav_bytes(make_wav(amplitude=0.0))
+
+    assert result["signal_quality"] == "silent_or_near_silent"
+    assert result["score_percent"] == 0
+    assert result["risk_level"] == "review"
+    assert result["is_synthetic_likely"] is False
+    assert result["alert"] == "INSUFFICIENT_AUDIO_SIGNAL"
+    assert "not enough signal" in result["notes"]
