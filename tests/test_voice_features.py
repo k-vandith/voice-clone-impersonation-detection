@@ -13,8 +13,12 @@ from src.voice_features import (
 def test_voice():
     df = build_synthetic_dataset(40)
     info = train_spoof_classifier(df)
+    assert info["validation_scope"] == "synthetic_demo_only"
+    assert info["accuracy"] is None
     risk = score_risk(extract_features_from_array(np.random.randn(4000)), info)
-    assert "risk_level" in risk
+    assert risk["risk_level"] == "review"
+    assert risk["spoof_probability"] is None
+    assert info["calibrated"] is False
 
 
 def test_empty_array_produces_finite_silence_features():
@@ -51,8 +55,10 @@ def test_spoof_probability_uses_class_label_not_probability_position():
         {"backend": "sklearn", "model": ReorderedClassesModel(), "feature_cols": ["energy_std"]},
     )
 
-    assert output["spoof_probability"] == 0.82
-    assert output["risk_level"] == "high"
+    assert output["spoof_probability"] is None
+    assert output["model_score"] == 0.82
+    assert output["risk_level"] == "review"
+    assert output["alert"] is False
 
 
 def test_single_class_natural_model_has_zero_spoof_probability():
@@ -64,7 +70,7 @@ def test_single_class_natural_model_has_zero_spoof_probability():
 
     output = score_risk(
         {"energy_std": 0.5},
-        {"backend": "sklearn", "model": NaturalOnlyModel(), "feature_cols": ["energy_std"]},
+        {"backend": "sklearn", "model": NaturalOnlyModel(), "feature_cols": ["energy_std"], "calibrated": True},
     )
 
     assert output["spoof_probability"] == 0.0
@@ -74,3 +80,30 @@ def test_single_class_natural_model_has_zero_spoof_probability():
 def test_synthetic_dataset_rejects_invalid_sizes():
     with pytest.raises(ValueError, match="positive integer"):
         build_synthetic_dataset(0)
+
+
+
+def test_energy_only_fallback_never_fabricates_spoof_probability():
+    result = score_risk({"energy_std": 0.0})
+
+    assert result["spoof_probability"] is None
+    assert result["model_score"] is None
+    assert result["risk_level"] == "review"
+    assert result["alert"] is False
+    assert result["status"] == "no_validated_model"
+
+
+def test_only_explicitly_calibrated_model_can_emit_probability():
+    class ScoreModel:
+        classes_ = np.array([0, 1])
+
+        def predict_proba(self, _features):
+            return np.array([[0.18, 0.82]])
+
+    result = score_risk(
+        {"energy_std": 0.5},
+        {"backend": "sklearn", "model": ScoreModel(), "feature_cols": ["energy_std"], "calibrated": True},
+    )
+
+    assert result["spoof_probability"] == 0.82
+    assert result["risk_level"] == "high"
