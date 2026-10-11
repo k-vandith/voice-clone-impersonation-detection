@@ -54,7 +54,7 @@ def detect(path: Path) -> DetectionResult:
     analysis = analyze_wav_bytes(raw)
     score = float(analysis["threshold_weight_score"])
     return DetectionResult(
-        is_synthetic_likely=bool(analysis["is_synthetic_likely"]),
+        is_synthetic_likely=analysis["is_synthetic_likely"],
         confidence=None,
         heuristic_score=round(score, 3),
         features=analysis["features"],
@@ -169,7 +169,7 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         "notes": (
             "Audio is silent or near-silent; there is not enough signal to assess voice-clone cues."
             if not has_measurable_signal
-            else "Human review only. This uncalibrated score is not a probability or a validated voice-clone detection. "
+            else "Human review only. This score is not a validated probability of cloned speech or a validated voice-clone detection. "
             "No real-world accuracy has been established; compare against trusted reference audio."
         ),
     }
