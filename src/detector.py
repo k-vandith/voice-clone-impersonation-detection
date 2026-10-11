@@ -169,7 +169,7 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         "notes": (
             "Audio is silent or near-silent; there is not enough signal to assess voice-clone cues."
             if not has_measurable_signal
-            else "Human review only. This score is not a validated probability of cloned speech or a validated voice-clone detection. "
+            else "Human review only. This score is not a probability; it is not a validated probability of cloned speech or a validated voice-clone detection. "
             "No real-world accuracy has been established; compare against trusted reference audio."
         ),
     }
