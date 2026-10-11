@@ -157,6 +157,7 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         "peak": round(peak, 5),
         "features": feats,
         "score": round(score / 0.9, 3),
+        "score_index": round(score / 0.9, 3),
         "score_percent": round(min(1.0, score / 0.9) * 100),
         "score_kind": "uncalibrated acoustic heuristic (not a probability)",
         "decision_status": "NOT_VALIDATED_HUMAN_REVIEW_ONLY",
