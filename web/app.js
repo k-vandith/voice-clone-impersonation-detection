@@ -196,19 +196,22 @@ function renderPayload(data) {
   activePayload = data;
   document.getElementById("scoreValue").textContent = String(data.score_percent);
   document.getElementById("scoreArc").setAttribute("stroke-dashoffset", String(439.82 * (1 - Math.max(0, Math.min(100, data.score_percent)) / 100)));
-  const risk = data.risk_level || "low";
+  const insufficientSignal = data.signal_quality === "silent_or_near_silent";
+  const risk = insufficientSignal ? "review" : (data.risk_level || "low");
   document.getElementById("scoreArc").setAttribute("stroke", risk === "high" ? "#e87983" : risk === "review" ? "#d8a04c" : "#6b4eff");
   const badge = document.getElementById("riskBadge");
   badge.className = "risk-badge " + risk;
-  badge.textContent = risk === "high" ? "STRONG HEURISTIC FLAGS" : risk === "review" ? "REVIEW INDICATED" : "NO STRONG FLAGS";
-  document.getElementById("decisionTitle").textContent = risk === "high" ? "Review this sample" : risk === "review" ? "Some signals stand out" : "No strong cues detected";
-  document.getElementById("decisionText").textContent = risk === "high"
-    ? "Several thresholds were triggered by this signal. This does not establish that the voice is cloned."
-    : risk === "review"
-      ? "One or more simple signal thresholds were triggered. Compare with trusted reference audio before drawing conclusions."
-      : "This sample did not cross the current heuristic thresholds. That is not proof that the voice is genuine.";
+  badge.textContent = insufficientSignal ? "INSUFFICIENT SIGNAL" : risk === "high" ? "STRONG HEURISTIC FLAGS" : risk === "review" ? "REVIEW INDICATED" : "NO STRONG FLAGS";
+  document.getElementById("decisionTitle").textContent = insufficientSignal ? "Not enough signal to assess" : risk === "high" ? "Review this sample" : risk === "review" ? "Some signals stand out" : "No strong cues detected";
+  document.getElementById("decisionText").textContent = insufficientSignal
+    ? "This file is silent or near-silent. Record a usable sample before interpreting any voice-integrity score."
+    : risk === "high"
+      ? "Several thresholds were triggered by this signal. This does not establish that the voice is cloned."
+      : risk === "review"
+        ? "One or more simple signal thresholds were triggered. Compare with trusted reference audio before drawing conclusions."
+        : "This sample did not cross the current heuristic thresholds. That is not proof that the voice is genuine.";
   document.getElementById("durationChip").textContent = formatDuration(data.duration_seconds);
-  document.getElementById("waveformStatus").textContent = "SIGNAL READY";
+  document.getElementById("waveformStatus").textContent = insufficientSignal ? "NO MEASURABLE SIGNAL" : "SIGNAL READY";
   document.getElementById("sampleRateLabel").textContent = (Number(data.sample_rate) / 1000).toFixed(1) + " KHZ";
   document.getElementById("channelLabel").textContent = data.channels === 1 ? "MONO" : "STEREO · DOWNMIXED";
   renderWaveform(data.waveform);
