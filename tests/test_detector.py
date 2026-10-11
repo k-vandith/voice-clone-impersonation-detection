@@ -13,7 +13,7 @@ def test_detect():
         runpy.run_path(str(p.parents[2] / "scripts" / "generate_demo_data.py"))
     result = detect(p)
     assert 0 <= result.confidence <= 1
-    assert result.alert in ("POSSIBLE_SYNTHETIC_VOICE", "LIKELY_NATURAL", "REVIEW_SIGNAL", "NO_STRONG_CUES")
+    assert result.alert in ("HEURISTIC_REVIEW_ONLY", "INSUFFICIENT_AUDIO_SIGNAL")
 
 
 def test_detect_uses_same_validated_decoder_as_upload_analysis(tmp_path: Path):
@@ -26,7 +26,9 @@ def test_detect_uses_same_validated_decoder_as_upload_analysis(tmp_path: Path):
 
     assert direct.features == upload["features"]
     assert direct.confidence == upload["threshold_weight_score"]
-    assert direct.is_synthetic_likely == upload["is_synthetic_likely"]
+    assert direct.is_synthetic_likely is None
+    assert upload["is_synthetic_likely"] is None
+    assert upload["decision_status"] == "NOT_VALIDATED_HUMAN_REVIEW_ONLY"
 
 
 def test_detect_rejects_non_wav_bytes_instead_of_scoring_them_as_audio(tmp_path: Path):
