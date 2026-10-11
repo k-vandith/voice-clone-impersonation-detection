@@ -61,7 +61,9 @@ def build_synthetic_dataset(n: int = 200, seed: int = 42) -> pd.DataFrame:
         features = extract_features_from_array(samples)
         features["label"] = 1 if spoof else 0
         rows.append(features)
-    return pd.DataFrame(rows)
+    frame = pd.DataFrame(rows)
+    frame.attrs["synthetic_demo_data"] = True
+    return frame
 
 
 def train_spoof_classifier(df: pd.DataFrame) -> dict[str, Any]:
@@ -105,14 +107,26 @@ def train_spoof_classifier(df: pd.DataFrame) -> dict[str, Any]:
             "backend": "sklearn",
             "model": classifier,
             "feature_cols": feature_cols,
-            "accuracy": accuracy,
+            "accuracy": None if df.attrs.get("synthetic_demo_data") else accuracy,
+            "calibrated": False,
+            "validation_scope": "synthetic_demo_only" if df.attrs.get("synthetic_demo_data") else "holdout_only_unvalidated",
         }
     except ImportError:
-        return {"backend": "rules", "model": None, "feature_cols": feature_cols, "accuracy": None}
+        return {
+            "backend": "rules",
+            "model": None,
+            "feature_cols": feature_cols,
+            "accuracy": None,
+            "calibrated": False,
+            "validation_scope": "synthetic_demo_only" if df.attrs.get("synthetic_demo_data") else "not_validated",
+        }
 
 
 def score_risk(feats: dict[str, float], model_info: dict[str, Any] | None = None) -> dict[str, Any]:
-    if model_info and model_info.get("backend") == "sklearn" and model_info.get("model") is not None:
+    """Score only with an explicit model; never invent a spoof probability from energy."""
+    model_score: float | None = None
+    has_model = bool(model_info and model_info.get("backend") == "sklearn" and model_info.get("model") is not None)
+    if has_model:
         feature_cols = model_info.get("feature_cols") or []
         missing = [column for column in feature_cols if column not in feats]
         if missing:
@@ -127,19 +141,37 @@ def score_risk(feats: dict[str, float], model_info: dict[str, Any] | None = None
             raise ValueError("Classifier returned invalid probability values.")
         spoof_indexes = np.flatnonzero(classes == 1)
         if len(spoof_indexes):
-            probability = float(probabilities[int(spoof_indexes[0])])
+            model_score = float(probabilities[int(spoof_indexes[0])])
         elif len(classes) == 1 and classes[0] == 0:
-            probability = 0.0
+            model_score = 0.0
         elif len(classes) == 1 and classes[0] == 1:
-            probability = 1.0
+            model_score = 1.0
         else:
             raise ValueError("Classifier must use numeric classes 0 (natural) and 1 (spoof).")
-        probability = min(1.0, max(0.0, probability))
-    else:
-        energy_std = float(feats.get("energy_std", 1.0))
-        if not np.isfinite(energy_std) or energy_std < 0:
-            raise ValueError("Energy standard deviation must be finite and non-negative.")
-        probability = float(1.0 / (1.0 + energy_std))
+        model_score = min(1.0, max(0.0, model_score))
 
+    calibrated = bool(model_info and model_info.get("calibrated") is True and model_score is not None)
+    if not calibrated:
+        return {
+            "spoof_probability": None,
+            "model_score": round(model_score, 4) if model_score is not None else None,
+            "risk_level": "review",
+            "alert": False,
+            "status": "uncalibrated_model" if has_model else "no_validated_model",
+            "interpretation": (
+                "Uncalibrated model output; no authenticity decision is supported. Human review required."
+                if has_model else
+                "No trained and calibrated model is available; acoustic features alone do not establish voice cloning."
+            ),
+        }
+
+    probability = float(model_score)
     level = "high" if probability >= 0.7 else ("medium" if probability >= 0.4 else "low")
-    return {"spoof_probability": round(probability, 4), "risk_level": level, "alert": level == "high"}
+    return {
+        "spoof_probability": round(probability, 4),
+        "model_score": round(probability, 4),
+        "risk_level": level,
+        "alert": level == "high",
+        "status": "calibrated_model",
+        "interpretation": "Model probability explicitly marked calibrated by caller; validate calibration on representative deployment data.",
+    }

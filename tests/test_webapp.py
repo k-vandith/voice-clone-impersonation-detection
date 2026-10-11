@@ -170,6 +170,18 @@ def test_silent_wav_is_marked_insufficient_not_possible_synthetic_voice():
     assert result["signal_quality"] == "silent_or_near_silent"
     assert result["score_percent"] == 0
     assert result["risk_level"] == "review"
-    assert result["is_synthetic_likely"] is False
+    assert result["is_synthetic_likely"] is None
     assert result["alert"] == "INSUFFICIENT_AUDIO_SIGNAL"
     assert "not enough signal" in result["notes"]
+
+
+
+def test_measurable_audio_is_never_reported_as_a_validated_clone_decision():
+    result = analyze_wav_bytes(build_demo_wav("processed"))
+
+    assert result["decision_status"] == "NOT_VALIDATED_HUMAN_REVIEW_ONLY"
+    assert result["is_synthetic_likely"] is None
+    assert result["risk_level"] == "review"
+    assert result["alert"] == "HEURISTIC_REVIEW_ONLY"
+    assert "uncalibrated" in result["score_kind"]
+    assert "not a probability" in result["notes"]

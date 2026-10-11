@@ -7,8 +7,9 @@ import numpy as np
 
 @dataclass
 class DetectionResult:
-    is_synthetic_likely: bool
-    confidence: float
+    is_synthetic_likely: bool | None
+    confidence: float | None
+    heuristic_score: float
     features: dict
     alert: str
     notes: str
@@ -53,8 +54,9 @@ def detect(path: Path) -> DetectionResult:
     analysis = analyze_wav_bytes(raw)
     score = float(analysis["threshold_weight_score"])
     return DetectionResult(
-        is_synthetic_likely=bool(analysis["is_synthetic_likely"]),
-        confidence=round(score, 3),
+        is_synthetic_likely=analysis["is_synthetic_likely"],
+        confidence=None,
+        heuristic_score=round(score, 3),
         features=analysis["features"],
         alert=analysis["alert"],
         notes=analysis["notes"],
@@ -136,12 +138,9 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         if feats["energy"] < 0.001:
             score += 0.2
     score = min(1.0, score)
-    risk_level = (
-        "review" if not has_measurable_signal
-        else "high" if score >= 0.5
-        else "review" if score >= 0.2
-        else "low"
-    )
+    # No validated/calibrated classifier exists in this repository. Expose the
+    # transparent heuristic score, but do not convert it into an authenticity decision.
+    risk_level = "review"
 
     point_count = min(240, len(samples))
     indexes = np.linspace(0, len(samples) - 1, num=point_count, dtype=int)
@@ -158,23 +157,21 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         "peak": round(peak, 5),
         "features": feats,
         "score": round(score / 0.9, 3),
+        "score_index": round(score / 0.9, 3),
         "score_percent": round(min(1.0, score / 0.9) * 100),
+        "score_kind": "uncalibrated acoustic heuristic (not a probability)",
+        "decision_status": "NOT_VALIDATED_HUMAN_REVIEW_ONLY",
         "threshold_weight_score": round(score, 3),
         "risk_level": risk_level,
         "signal_quality": "measurable" if has_measurable_signal else "silent_or_near_silent",
-        "is_synthetic_likely": bool(has_measurable_signal and score >= 0.5),
-        "alert": (
-            "INSUFFICIENT_AUDIO_SIGNAL" if not has_measurable_signal
-            else "POSSIBLE_SYNTHETIC_VOICE" if score >= 0.5
-            else "REVIEW_SIGNAL" if risk_level == "review"
-            else "NO_STRONG_CUES"
-        ),
+        "is_synthetic_likely": None,
+        "alert": "INSUFFICIENT_AUDIO_SIGNAL" if not has_measurable_signal else "HEURISTIC_REVIEW_ONLY",
         "waveform": waveform,
         "notes": (
             "Audio is silent or near-silent; there is not enough signal to assess voice-clone cues."
             if not has_measurable_signal
-            else "Transparent signal heuristics only. This score is not a validated probability of cloned speech; "
-            "real-world accuracy has not been established."
+            else "Human review only. This score is not a probability; it is not a validated probability of cloned speech or a validated voice-clone detection. "
+            "No real-world accuracy has been established; compare against trusted reference audio."
         ),
     }
 
