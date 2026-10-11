@@ -22,6 +22,8 @@ def extract_features(samples: np.ndarray, sr: int) -> dict:
         raise ValueError("Audio samples must be a one-dimensional mono array.")
     if not np.all(np.isfinite(values)):
         raise ValueError("Audio samples must contain only finite values.")
+    if values.size and np.any(np.abs(values) > 1.0):
+        raise ValueError("Audio samples must be normalized to the range [-1, 1].")
     if len(values) == 0:
         return {"zcr": 0.0, "energy": 0.0, "spectral_centroid_proxy": 0.0, "flatness": 0.0}
     zcr = float(np.mean(np.abs(np.diff(np.sign(values)))) / 2) if len(values) > 1 else 0.0
