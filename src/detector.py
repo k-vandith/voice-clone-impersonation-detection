@@ -13,51 +13,50 @@ class DetectionResult:
     alert: str
     notes: str
 
-def _read_wav_mono(path: Path) -> tuple[np.ndarray, int]:
-    data = path.read_bytes()
-    if data[:4] != b"RIFF":
-        arr = np.frombuffer(data[:8000], dtype=np.uint8).astype(np.float32) / 128.0 - 1.0
-        return arr, 16000
-    sr = struct.unpack_from("<I", data, 24)[0]
-    idx = data.find(b"data")
-    if idx < 0:
-        raise ValueError("No data chunk")
-    size = struct.unpack_from("<I", data, idx + 4)[0]
-    pcm = data[idx + 8: idx + 8 + size]
-    samples = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-    return samples, sr
-
 def extract_features(samples: np.ndarray, sr: int) -> dict:
-    if len(samples) == 0:
-        return {"zcr": 0, "energy": 0, "spectral_centroid_proxy": 0, "flatness": 0}
-    zcr = float(np.mean(np.abs(np.diff(np.sign(samples)))) / 2)
-    energy = float(np.mean(samples ** 2))
-    spec = np.abs(np.fft.rfft(samples[: min(len(samples), sr)]))
-    freqs = np.fft.rfftfreq(min(len(samples), sr), 1 / sr)
+    """Compute finite, bounded signal features from mono floating-point samples."""
+    if not isinstance(sr, int) or isinstance(sr, bool) or sr <= 0:
+        raise ValueError("Sample rate must be a positive integer.")
+    values = np.asarray(samples, dtype=np.float32)
+    if values.ndim != 1:
+        raise ValueError("Audio samples must be a one-dimensional mono array.")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("Audio samples must contain only finite values.")
+    if len(values) == 0:
+        return {"zcr": 0.0, "energy": 0.0, "spectral_centroid_proxy": 0.0, "flatness": 0.0}
+    zcr = float(np.mean(np.abs(np.diff(np.sign(values)))) / 2) if len(values) > 1 else 0.0
+    energy = float(np.mean(values ** 2))
+    window = values[: min(len(values), sr)]
+    spec = np.abs(np.fft.rfft(window))
+    freqs = np.fft.rfftfreq(len(window), 1 / sr)
     centroid = float(np.sum(freqs * spec) / (np.sum(spec) + 1e-9))
     flatness = float(np.exp(np.mean(np.log(spec + 1e-9))) / (np.mean(spec) + 1e-9))
-    return {"zcr": round(zcr, 5), "energy": round(energy, 5), "spectral_centroid_proxy": round(centroid, 2), "flatness": round(flatness, 5)}
+    return {
+        "zcr": round(zcr, 5),
+        "energy": round(energy, 5),
+        "spectral_centroid_proxy": round(centroid, 2),
+        "flatness": round(flatness, 5),
+    }
+
 
 def detect(path: Path) -> DetectionResult:
-    samples, sr = _read_wav_mono(Path(path))
-    feats = extract_features(samples, sr)
-    score = 0.0
-    if feats["flatness"] > 0.4:
-        score += 0.4
-    if feats["zcr"] < 0.05 or feats["zcr"] > 0.3:
-        score += 0.3
-    if feats["energy"] < 0.001:
-        score += 0.2
-    score = min(1.0, score)
-    likely = score >= 0.5
-    return DetectionResult(
-        is_synthetic_likely=likely,
-        confidence=round(score, 3),
-        features=feats,
-        alert="POSSIBLE_SYNTHETIC_VOICE" if likely else "LIKELY_NATURAL",
-        notes="Heuristic CPU demo only — not a production deepfake detector. Model uncertainty is high.",
-    )
+    """Detect using the same validated PCM-WAV path as the upload endpoint."""
+    source = Path(path)
+    try:
+        with source.open("rb") as handle:
+            raw = handle.read(12 * 1024 * 1024 + 1)
+    except OSError as error:
+        raise FileNotFoundError(f"Audio file not found or unreadable: {source}") from error
 
+    analysis = analyze_wav_bytes(raw)
+    score = float(analysis["threshold_weight_score"])
+    return DetectionResult(
+        is_synthetic_likely=bool(analysis["is_synthetic_likely"]),
+        confidence=round(score, 3),
+        features=analysis["features"],
+        alert=analysis["alert"],
+        notes=analysis["notes"],
+    )
 
 def analyze_wav_bytes(raw: bytes) -> dict:
     """Analyze an uploaded PCM WAV in memory and return explainable signal cues.
@@ -122,21 +121,29 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         raise ValueError("The WAV file contains invalid sample values.")
 
     feats = extract_features(samples, sample_rate)
+    rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0
+    peak = float(np.max(np.abs(samples))) if len(samples) else 0.0
+    has_measurable_signal = rms >= 0.002 and peak >= 0.01
+
     score = 0.0
-    if feats["flatness"] > 0.4:
-        score += 0.4
-    if feats["zcr"] < 0.05 or feats["zcr"] > 0.3:
-        score += 0.3
-    if feats["energy"] < 0.001:
-        score += 0.2
+    if has_measurable_signal:
+        if feats["flatness"] > 0.4:
+            score += 0.4
+        if feats["zcr"] < 0.05 or feats["zcr"] > 0.3:
+            score += 0.3
+        if feats["energy"] < 0.001:
+            score += 0.2
     score = min(1.0, score)
-    risk_level = "high" if score >= 0.5 else ("review" if score >= 0.2 else "low")
+    risk_level = (
+        "review" if not has_measurable_signal
+        else "high" if score >= 0.5
+        else "review" if score >= 0.2
+        else "low"
+    )
 
     point_count = min(240, len(samples))
     indexes = np.linspace(0, len(samples) - 1, num=point_count, dtype=int)
     waveform = [round(float(value), 4) for value in samples[indexes]]
-    rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0
-    peak = float(np.max(np.abs(samples))) if len(samples) else 0.0
 
     return {
         "file_bytes": len(raw),
@@ -152,11 +159,19 @@ def analyze_wav_bytes(raw: bytes) -> dict:
         "score_percent": round(min(1.0, score / 0.9) * 100),
         "threshold_weight_score": round(score, 3),
         "risk_level": risk_level,
-        "is_synthetic_likely": score >= 0.5,
-        "alert": "POSSIBLE_SYNTHETIC_VOICE" if score >= 0.5 else ("REVIEW_SIGNAL" if risk_level == "review" else "NO_STRONG_CUES"),
+        "signal_quality": "measurable" if has_measurable_signal else "silent_or_near_silent",
+        "is_synthetic_likely": bool(has_measurable_signal and score >= 0.5),
+        "alert": (
+            "INSUFFICIENT_AUDIO_SIGNAL" if not has_measurable_signal
+            else "POSSIBLE_SYNTHETIC_VOICE" if score >= 0.5
+            else "REVIEW_SIGNAL" if risk_level == "review"
+            else "NO_STRONG_CUES"
+        ),
         "waveform": waveform,
         "notes": (
-            "Transparent signal heuristics only. This score is not a validated probability of cloned speech; "
+            "Audio is silent or near-silent; there is not enough signal to assess voice-clone cues."
+            if not has_measurable_signal
+            else "Transparent signal heuristics only. This score is not a validated probability of cloned speech; "
             "real-world accuracy has not been established."
         ),
     }

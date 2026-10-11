@@ -1,51 +1,145 @@
-"""Voice clone detection: synthetic MFCC features, classifier, risk meter."""
+"""Voice clone detection: compact signal features, classifier and risk meter."""
 from __future__ import annotations
-from pathlib import Path
+
 from typing import Any
+
 import numpy as np
 import pandas as pd
 
+
 def extract_features_from_array(samples: np.ndarray, sr: int = 16000) -> dict[str, float]:
-    samples = np.asarray(samples, dtype=float)
-    if samples.size == 0: samples = np.zeros(sr)
+    if not isinstance(sr, int) or isinstance(sr, bool) or sr <= 0:
+        raise ValueError("Sample rate must be a positive integer.")
+    values = np.asarray(samples, dtype=float)
+    if values.ndim != 1:
+        raise ValueError("Audio samples must be a one-dimensional mono array.")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("Audio samples must contain only finite values.")
+    if values.size == 0:
+        values = np.zeros(2048, dtype=float)
+
     frame = 512
-    energies = [float(np.mean(samples[i:i+frame]**2)) for i in range(0, max(1, len(samples)-frame), frame)] or [0.0]
-    energies = np.array(energies)
-    window = samples[:min(len(samples), 2048)]
-    if len(window) < 2048: window = np.pad(window, (0, 2048-len(window)))
-    spec = np.abs(np.fft.rfft(window * np.hanning(len(window))))
-    logspec = np.log(spec + 1e-8)
-    mfcc = [float(np.sum(logspec * np.cos(np.pi*k*(np.arange(len(logspec))+0.5)/len(logspec)))) for k in range(min(13, len(logspec)))]
-    return {"energy_mean": float(np.mean(energies)), "energy_std": float(np.std(energies)), "zcr": float(np.mean(np.abs(np.diff(np.sign(samples))))/2), "mfcc0": mfcc[0] if mfcc else 0.0, "mfcc1": mfcc[1] if len(mfcc)>1 else 0.0, "mfcc2": mfcc[2] if len(mfcc)>2 else 0.0, "spectral_centroid": float(np.sum(np.arange(len(spec))*spec)/(np.sum(spec)+1e-8))}
+    energy_values = [
+        float(np.mean(values[index:index + frame] ** 2))
+        for index in range(0, max(1, len(values) - frame + 1), frame)
+    ] or [0.0]
+    energies = np.asarray(energy_values, dtype=float)
+    window = values[:min(len(values), 2048)]
+    if len(window) < 2048:
+        window = np.pad(window, (0, 2048 - len(window)))
+    spectrum = np.abs(np.fft.rfft(window * np.hanning(len(window))))
+    log_spectrum = np.log(spectrum + 1e-8)
+    coefficients = [
+        float(np.sum(
+            log_spectrum
+            * np.cos(np.pi * coefficient * (np.arange(len(log_spectrum)) + 0.5) / len(log_spectrum))
+        ))
+        for coefficient in range(min(13, len(log_spectrum)))
+    ]
+    result = {
+        "energy_mean": float(np.mean(energies)),
+        "energy_std": float(np.std(energies)),
+        "zcr": float(np.mean(np.abs(np.diff(np.sign(values)))) / 2) if len(values) > 1 else 0.0,
+        "mfcc0": coefficients[0] if coefficients else 0.0,
+        "mfcc1": coefficients[1] if len(coefficients) > 1 else 0.0,
+        "mfcc2": coefficients[2] if len(coefficients) > 2 else 0.0,
+        "spectral_centroid": float(np.sum(np.arange(len(spectrum)) * spectrum) / (np.sum(spectrum) + 1e-8)),
+    }
+    if not np.isfinite(np.asarray(list(result.values()), dtype=float)).all():
+        raise ValueError("Feature extraction produced non-finite values.")
+    return result
+
 
 def build_synthetic_dataset(n: int = 200, seed: int = 42) -> pd.DataFrame:
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise ValueError("Synthetic dataset size must be a positive integer.")
     rng = np.random.default_rng(seed)
     rows = []
-    for i in range(n):
-        spoof = i % 2 == 1
+    for index in range(n):
+        spoof = index % 2 == 1
         samples = rng.normal(0.4 if spoof else 0.0, 0.5 if spoof else 1.0, size=8000)
-        feats = extract_features_from_array(samples); feats["label"] = 1 if spoof else 0; rows.append(feats)
+        features = extract_features_from_array(samples)
+        features["label"] = 1 if spoof else 0
+        rows.append(features)
     return pd.DataFrame(rows)
 
+
 def train_spoof_classifier(df: pd.DataFrame) -> dict[str, Any]:
-    feature_cols = [c for c in df.columns if c != "label"]
-    X, y = df[feature_cols].values, df["label"].values
+    if "label" not in df.columns:
+        raise ValueError("Training data must include a binary 'label' column.")
+    if df.empty:
+        raise ValueError("Training data must contain at least 8 labelled examples.")
+    feature_cols = [column for column in df.columns if column != "label"]
+    if not feature_cols:
+        raise ValueError("Training data must include at least one feature column.")
+    if len(df) < 8:
+        raise ValueError("Training data must contain at least 8 labelled examples.")
+
+    labels = pd.to_numeric(df["label"], errors="coerce").to_numpy()
+    if not np.isfinite(labels).all() or not np.isin(labels, [0, 1]).all():
+        raise ValueError("Labels must be numeric 0 (natural) or 1 (spoof).")
+    classes, counts = np.unique(labels.astype(int), return_counts=True)
+    if not np.array_equal(classes, np.array([0, 1])) or np.any(counts < 2):
+        raise ValueError("Training data must include at least two examples of each label (0 and 1).")
+
+    try:
+        X = df[feature_cols].apply(pd.to_numeric, errors="raise").to_numpy(dtype=float)
+    except (TypeError, ValueError) as error:
+        raise ValueError("All model feature columns must contain numeric values.") from error
+    if not np.isfinite(X).all():
+        raise ValueError("Model feature columns must contain only finite values.")
+    y = labels.astype(int)
+
     try:
         from sklearn.ensemble import RandomForestClassifier
-        from sklearn.model_selection import train_test_split
         from sklearn.metrics import accuracy_score
-        Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.25, random_state=42)
-        clf = RandomForestClassifier(n_estimators=40, random_state=42); clf.fit(Xtr, ytr)
-        return {"backend": "sklearn", "model": clf, "feature_cols": feature_cols, "accuracy": float(accuracy_score(yte, clf.predict(Xte)))}
+        from sklearn.model_selection import train_test_split
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.25, random_state=42, stratify=y
+        )
+        classifier = RandomForestClassifier(n_estimators=40, random_state=42)
+        classifier.fit(X_train, y_train)
+        accuracy = float(accuracy_score(y_test, classifier.predict(X_test)))
+        return {
+            "backend": "sklearn",
+            "model": classifier,
+            "feature_cols": feature_cols,
+            "accuracy": accuracy,
+        }
     except ImportError:
         return {"backend": "rules", "model": None, "feature_cols": feature_cols, "accuracy": None}
 
+
 def score_risk(feats: dict[str, float], model_info: dict[str, Any] | None = None) -> dict[str, Any]:
     if model_info and model_info.get("backend") == "sklearn" and model_info.get("model") is not None:
-        X = np.array([[feats.get(c, 0.0) for c in model_info["feature_cols"]]])
-        proba = model_info["model"].predict_proba(X)[0]
-        p = float(proba[1]) if len(proba) > 1 else float(proba[0])
+        feature_cols = model_info.get("feature_cols") or []
+        missing = [column for column in feature_cols if column not in feats]
+        if missing:
+            raise ValueError(f"Missing model features: {', '.join(missing)}")
+        values = np.asarray([feats[column] for column in feature_cols], dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError("Model features must contain only finite values.")
+        classifier = model_info["model"]
+        probabilities = np.asarray(classifier.predict_proba(values.reshape(1, -1))[0], dtype=float)
+        classes = np.asarray(classifier.classes_)
+        if len(probabilities) != len(classes) or not np.isfinite(probabilities).all():
+            raise ValueError("Classifier returned invalid probability values.")
+        spoof_indexes = np.flatnonzero(classes == 1)
+        if len(spoof_indexes):
+            probability = float(probabilities[int(spoof_indexes[0])])
+        elif len(classes) == 1 and classes[0] == 0:
+            probability = 0.0
+        elif len(classes) == 1 and classes[0] == 1:
+            probability = 1.0
+        else:
+            raise ValueError("Classifier must use numeric classes 0 (natural) and 1 (spoof).")
+        probability = min(1.0, max(0.0, probability))
     else:
-        p = float(1.0 / (1.0 + feats.get("energy_std", 1.0)))
-    level = "high" if p >= 0.7 else ("medium" if p >= 0.4 else "low")
-    return {"spoof_probability": round(p, 4), "risk_level": level, "alert": level == "high"}
+        energy_std = float(feats.get("energy_std", 1.0))
+        if not np.isfinite(energy_std) or energy_std < 0:
+            raise ValueError("Energy standard deviation must be finite and non-negative.")
+        probability = float(1.0 / (1.0 + energy_std))
+
+    level = "high" if probability >= 0.7 else ("medium" if probability >= 0.4 else "low")
+    return {"spoof_probability": round(probability, 4), "risk_level": level, "alert": level == "high"}
